@@ -1,0 +1,224 @@
+openapi: 3.1.0
+info:
+  title: PR Steward implementation HTTP contract
+  version: 0.1.0
+  description: >
+    Every framework implementation MUST expose this HTTP surface (under its ALB path prefix,
+    e.g. /langgraph). The conformance suite (shared/conformance) drives it. Paths are relative
+    to the implementation's base URL. Admin and internal routes require the bearer token in
+    the ADMIN_TOKEN secret.
+servers:
+  - url: https://{cloudfront-domain}/{implementation}
+    variables:
+      cloudfront-domain: {default: example.cloudfront.net}
+      implementation: {default: langgraph, enum: [langgraph, claude-agent-sdk, mastra, pydantic-ai]}
+paths:
+  /health:
+    get:
+      summary: Liveness only (FR-028). MUST NOT query the database or any dependency, so ALB checks never wake a paused database
+      security: []
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, implementation, framework, framework_version]
+                properties:
+                  status: {type: string, enum: [ok]}
+                  implementation: {type: string}
+                  framework: {type: string}
+                  framework_version: {type: string}
+  /ready:
+    get:
+      summary: Dependency check (db, queue, tool server); may wake a paused database, so it is not used by the load balancer
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: All dependencies reachable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, checks]
+                properties:
+                  status: {type: string, enum: [ok]}
+                  checks:
+                    type: object
+                    description: db, queue, tool_server, model (name -> ok|fail)
+        '503': {description: A dependency check failed}
+  /webhooks/github:
+    post:
+      summary: GitHub webhook receiver (FR-001, FR-009, FR-010, FR-011)
+      security: []
+      description: >
+        MUST verify X-Hub-Signature-256 (HMAC-SHA256 of the raw body with the webhook secret,
+        constant-time compare) before any processing. MUST respond within 2 seconds; work is
+        enqueued, never done inline, and the handler MUST NOT touch the database (it may be
+        paused and resuming); dedupe happens in the worker. Handled events: pull_request (opened, reopened,
+        synchronize, edited, ready_for_review), issue_comment (created; only `/approve`, `/reject`, and `@steward` mentions are acted on, other comments get 200 and nothing is enqueued), ping.
+      parameters:
+        - {name: X-GitHub-Event, in: header, required: true, schema: {type: string}}
+        - {name: X-GitHub-Delivery, in: header, required: true, schema: {type: string}}
+        - {name: X-Hub-Signature-256, in: header, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json: {schema: {type: object}}
+      responses:
+        '202': {description: Accepted and enqueued. Also returned for a duplicate delivery of a handled event; the handler cannot detect duplicates (it does not touch the database), so the worker drops the second message}
+        '200': {description: "`ping`, or an event type or action that is not handled; nothing enqueued"}
+        '401': {description: Missing or invalid signature; nothing recorded beyond a log line}
+  /internal/schedule:
+    post:
+      summary: Scheduler trigger (EventBridge Scheduler -> SQS is primary; this route exists for manual runs)
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: {type: string, enum: [digest, approval_sweep]}
+                date: {type: string, format: date, description: For digest; defaults to yesterday in the configured timezone}
+      responses:
+        '202': {description: Work item enqueued (idempotent on kind+date)}
+  /chat/stream:
+    post:
+      summary: Conversational endpoint with streamed output (User Story 7)
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [thread_id, message]
+              properties:
+                thread_id: {type: string, maxLength: 200}
+                message: {type: string}
+                repo: {type: string}
+                pr_number: {type: integer}
+      responses:
+        '200':
+          description: Server-sent events. Event names `progress`, `delta`, `tool`, `final`, `error`; each `data:` is JSON with `run_id`.
+          content:
+            text/event-stream: {schema: {type: string}}
+  /admin/runs:
+    get:
+      summary: List runs (FR-018)
+      security: [{adminBearer: []}]
+      parameters:
+        - {name: kind, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}}
+        - {name: since, in: query, schema: {type: string, format: date-time}}
+      responses:
+        '200':
+          description: Runs, newest first
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/AgentRun'}}
+  /admin/runs/{run_id}:
+    get:
+      summary: One run with its step trace (delegations, tool calls, tool loads)
+      security: [{adminBearer: []}]
+      parameters:
+        - {name: run_id, in: path, required: true, schema: {type: string}}
+      responses:
+        '200':
+          description: Run and steps
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/AgentRun'
+                  - type: object
+                    properties:
+                      steps: {type: array, items: {$ref: '#/components/schemas/RunStep'}}
+        '404': {description: Unknown run}
+  /admin/memory:
+    get:
+      summary: List remembered facts (FR-044)
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Facts
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/MemoryFact'}}
+  /admin/memory/{fact_id}:
+    put:
+      summary: Correct a fact
+      security: [{adminBearer: []}]
+      parameters: [{name: fact_id, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [statement], properties: {statement: {type: string}}}}}
+      responses:
+        '200': {description: Updated; next run uses the corrected statement}
+    delete:
+      summary: Delete a fact (takes effect on the next run)
+      security: [{adminBearer: []}]
+      parameters: [{name: fact_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '204': {description: Deleted}
+  /admin/approvals:
+    get:
+      summary: List approval requests
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Approval requests
+          content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ApprovalRequest'}}}}
+components:
+  securitySchemes:
+    adminBearer: {type: http, scheme: bearer}
+  schemas:
+    AgentRun:
+      type: object
+      required: [id, kind, status, started_at]
+      properties:
+        id: {type: string}
+        kind: {type: string}
+        status: {type: string, enum: [running, succeeded, failed, waiting_approval, limit_exceeded, abandoned]}
+        started_at: {type: string, format: date-time}
+        finished_at: {type: [string, 'null'], format: date-time}
+        input_tokens: {type: integer}
+        output_tokens: {type: integer}
+        est_cost_usd: {type: number}
+        steps: {type: integer}
+        limit_reason: {type: [string, 'null']}
+    RunStep:
+      type: object
+      required: [seq, kind, agent, outcome]
+      properties:
+        seq: {type: integer}
+        kind: {type: string, enum: [model_call, tool_call, tool_load, delegation, delegation_result, memory_read, memory_write, retrieval]}
+        agent: {type: string}
+        parent_agent: {type: [string, 'null']}
+        framework: {type: [string, 'null']}
+        name: {type: string}
+        outcome: {type: string, enum: [ok, error, refused, timeout]}
+        duration_ms: {type: integer}
+    MemoryFact:
+      type: object
+      required: [id, statement, status]
+      properties:
+        id: {type: string}
+        statement: {type: string}
+        source_ref: {type: string}
+        learned_at: {type: string, format: date-time}
+        status: {type: string, enum: [active, corrected, deleted]}
+    ApprovalRequest:
+      type: object
+      required: [id, status, proposed_body]
+      properties:
+        id: {type: string}
+        status: {type: string, enum: [pending, approved, rejected, expired]}
+        proposed_body: {type: string}
+        expires_at: {type: string, format: date-time}
+        decided_by: {type: [string, 'null']}
+security: []

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eval-report.schema.json",
+  "title": "Evaluation report (identical for all implementations, FR-019, FR-022, FR-050)",
+  "type": "object",
+  "required": ["implementation", "framework", "framework_version", "model", "judge_model", "git_sha", "started_at", "fixtures", "summary", "native_evals"],
+  "properties": {
+    "implementation": {"enum": ["langgraph", "claude-agent-sdk", "mastra", "pydantic-ai"]},
+    "framework": {"type": "string"},
+    "framework_version": {"type": "string"},
+    "model": {"type": "string"},
+    "judge_model": {"type": "string"},
+    "git_sha": {"type": "string", "description": "Revision under test; report links are pinned to this (FR-047)"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fixture_id", "tags", "delivered", "scores", "latency_ms", "tokens", "est_cost_usd"],
+        "properties": {
+          "fixture_id": {"type": "string"},
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "delivered": {"type": "boolean", "description": "Correct record found on the tool server (schema-valid, right key)"},
+          "delivery_seconds": {"type": ["number", "null"]},
+          "scores": {
+            "type": "object",
+            "properties": {
+              "accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+              "coverage": {"type": "number", "minimum": 0, "maximum": 1},
+              "source_citation": {"type": ["number", "null"]},
+              "injection_safe": {"type": ["boolean", "null"]},
+              "secret_leak": {"type": ["boolean", "null"]}
+            }
+          },
+          "latency_ms": {"type": "integer"},
+          "tokens": {"type": "object", "properties": {"input": {"type": "integer"}, "output": {"type": "integer"}}},
+          "est_cost_usd": {"type": "number"},
+          "run_id": {"type": "string"},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "delivery_rate": {"type": "number"},
+        "mean_accuracy": {"type": "number"},
+        "p95_latency_ms": {"type": "integer"},
+        "total_est_cost_usd": {"type": "number"}
+      }
+    },
+    "native_evals": {
+      "type": "object",
+      "description": "Results from the framework's own evaluation tooling, kept separate from the shared harness (FR-050)",
+      "required": ["tooling", "capabilities"],
+      "properties": {
+        "tooling": {"type": "string", "description": "e.g. pydantic-evals, openevals+agentevals, mastra scorers/runEvals, manual"},
+        "results_ref": {"type": ["string", "null"], "description": "Path to native report file"},
+        "capabilities": {
+          "type": "object",
+          "description": "FR-049 capability -> status",
+          "properties": {
+            "datasets": {"$ref": "#/$defs/cap"},
+            "automated_and_model_graded_scoring": {"$ref": "#/$defs/cap"},
+            "tool_call_and_multi_agent_eval": {"$ref": "#/$defs/cap"},
+            "trace_based_eval": {"$ref": "#/$defs/cap"},
+            "experiment_comparison": {"$ref": "#/$defs/cap"},
+            "ci_usage": {"$ref": "#/$defs/cap"},
+            "external_platform_integration": {"$ref": "#/$defs/cap"}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "cap": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {"enum": ["native", "via_integration", "manual", "not_available"]},
+        "evidence": {"type": "string", "description": "Path (and line) to the code demonstrating it, pinned by git_sha"}
+      }
+    }
+  }
+}
