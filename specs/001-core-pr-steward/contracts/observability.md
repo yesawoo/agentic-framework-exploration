@@ -1,5 +1,7 @@
 # Contract: Logs and metrics (Constitution VI)
 
+Owner: spec 001 (FR-018 baseline, FR-020, FR-021). Spec 004 adds OpenTelemetry export and does not change these names.
+
 Every implementation and the tool server emit the same structured logs and CloudWatch EMF metrics so alarms and the report compare like with like.
 
 ## Logs

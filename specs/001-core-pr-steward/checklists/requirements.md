@@ -1,7 +1,7 @@
-# Specification Quality Checklist: Agent Framework Comparison
+# Specification Quality Checklist: Core PR Steward (spec 001)
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2026-09-28
+**Created**: 2026-09-28 (re-cut 2026-09-30)
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,5 +31,7 @@
 
 ## Notes
 
+- Re-cut: this checklist covers spec 001 only (US1 to US3, FRs and SCs listed in spec.md). Scope moved to specs 002 to 004 is named under "Out of scope here", and every original ID is kept.
+- Depends on / Reconciliation / Handoff to 002 sections are present; Reconciliation is "not applicable, first spec".
 - Digest destination resolved: GitHub issue in the watched repo (plus tool server record).
 - The constitution was copied verbatim from the glitch repo; several principles (Kamal, Rails, monorepo layout, Victoria* stack) do not apply here and should be adapted with `/speckit-constitution` before planning.

@@ -1,0 +1,53 @@
+openapi: 3.1.0
+info:
+  title: PR Steward implementation HTTP contract, extended-capabilities additions
+  version: 0.1.0
+  description: >
+    OpenAPI fragment. Extends spec 001 `contracts/http-api.yaml` (base contract; same servers,
+    the `adminBearer` security scheme, and the `AgentRun`/`RunStep` schemas defined there) and
+    is merged with it by the conformance client. Every implementation MUST expose these
+    paths under its ALB path prefix. Requirements: FR-042 to FR-045 (User Story 15).
+    The agent MCP endpoint (`/<implementation>/mcp`, contracts/agent-mcp-server.md) and the
+    A2A endpoints (`/<implementation>/a2a`, `/.well-known/agent-card.json`,
+    contracts/a2a-specialist.md) are protocol endpoints described in their own contract files,
+    not repeated here.
+paths:
+  /admin/memory:
+    get:
+      summary: List remembered facts (FR-044)
+      security: [{adminBearer: []}]
+      responses:
+        '200':
+          description: Facts
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/MemoryFact'}}
+  /admin/memory/{fact_id}:
+    put:
+      summary: Correct a fact
+      security: [{adminBearer: []}]
+      parameters: [{name: fact_id, in: path, required: true, schema: {type: string}}]
+      requestBody:
+        required: true
+        content: {application/json: {schema: {type: object, required: [statement], properties: {statement: {type: string}}}}}
+      responses:
+        '200': {description: Updated; next run uses the corrected statement}
+        '404': {description: Unknown fact}
+    delete:
+      summary: Delete a fact (takes effect on the next run)
+      security: [{adminBearer: []}]
+      parameters: [{name: fact_id, in: path, required: true, schema: {type: string}}]
+      responses:
+        '204': {description: Deleted}
+        '404': {description: Unknown fact}
+components:
+  schemas:
+    MemoryFact:
+      type: object
+      required: [id, statement, status]
+      properties:
+        id: {type: string}
+        statement: {type: string}
+        source_ref: {type: string}
+        learned_at: {type: string, format: date-time}
+        status: {type: string, enum: [active, corrected, deleted]}

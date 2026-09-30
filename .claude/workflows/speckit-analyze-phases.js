@@ -1,7 +1,7 @@
 export const meta = {
   name: 'speckit-analyze-phases',
   description: 'Lint the Spec Kit artifacts deterministically, analyze each tasks.md phase from a small packet (Sonnet), verify HIGH/CRITICAL findings, then have Sonnet agents fix the artifacts and re-check, up to 4 fix cycles',
-  whenToUse: 'After tasks.md exists for a Spec Kit feature and whole-feature analysis keeps looping. Args: {feature?: "001-agent-framework-comparison", phases?: [1,2,3], crossCutting?: true, fix?: true, maxIterations?: 4, fixLow?: false, fixLintLow?: true, model?: "sonnet", crossModel?: "opus", fixModel?: "sonnet", deferred?: ["..."], snapshotLabel?: "pre-fix"}. Set fix:false for a single read-only pass.',
+  whenToUse: 'After tasks.md exists for a Spec Kit feature and whole-feature analysis keeps looping. Args: {feature?: "001-core-pr-steward", phases?: [1,2,3], crossCutting?: true, fix?: true, maxIterations?: 4, fixLow?: false, fixLintLow?: true, model?: "sonnet", crossModel?: "opus", fixModel?: "sonnet", deferred?: ["..."], snapshotLabel?: "pre-fix"}. Set fix:false for a single read-only pass.',
   phases: [
     { title: 'Prepare', detail: 'run the deterministic linter and build per-phase packets (cheap model)' },
     { title: 'Snapshot', detail: 'copy the feature dir before any edit' },
@@ -14,7 +14,7 @@ export const meta = {
 }
 
 const cfg = args || {}
-const FEATURE = cfg.feature || '001-agent-framework-comparison'
+const FEATURE = cfg.feature || '001-core-pr-steward'
 const MODEL = cfg.model || 'sonnet'
 const CROSS_MODEL = cfg.crossModel || 'opus'
 const FIX_MODEL = cfg.fixModel || 'sonnet'

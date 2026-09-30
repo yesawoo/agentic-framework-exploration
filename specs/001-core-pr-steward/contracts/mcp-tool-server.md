@@ -1,6 +1,6 @@
 # Contract: Reference MCP tool server
 
-**Requirements**: FR-003, FR-004, FR-010 | Transport: MCP Streamable HTTP at `/mcp` | Auth: `Authorization: Bearer <token>` (static token from Secrets Manager; no interactive OAuth, because two of the four MCP clients do not run OAuth flows).
+**Requirements**: FR-003, FR-004, FR-010 | Owner: spec 001 (`record_review` is served here but first used by agents in spec 002) | Transport: MCP Streamable HTTP at `/mcp` | Auth: `Authorization: Bearer <token>` (static token from Secrets Manager; no interactive OAuth, because two of the four MCP clients do not run OAuth flows).
 
 Implementation: Python, official `mcp` SDK (FastMCP). Every agent implementation MUST **discover** these tools via `tools/list` at run time (not hard-code schemas) and call them via `tools/call`. The server records each call in `toolserver.calls` (with MCP client name/version) for the MCP evaluation in the report.
 

@@ -1,0 +1,78 @@
+openapi: 3.1.0
+info:
+  title: PR Steward implementation HTTP contract, additions from spec 002 (multi-agent and safe interaction)
+  version: 0.2.0
+  description: >
+    OpenAPI fragment. Extends the base contract at
+    specs/001-core-pr-steward/contracts/http-api.yaml (same servers, security scheme
+    `adminBearer`, base path prefix, and `AgentRun`/`RunStep` schemas); it does not repeat them.
+    Every implementation MUST expose these paths in addition to the base contract. The conformance
+    suite (shared/conformance) drives them. Paths owned by later specs (memory admin, agent MCP,
+    A2A) are in specs/003-extended-capabilities.
+x-extends: ../../001-core-pr-steward/contracts/http-api.yaml
+x-amends:
+  - target: "POST /webhooks/github"
+    note: >
+      Handled events, in addition to pull_request (now enqueuing both `pr_summary` and `pr_review`
+      for opened, reopened, synchronize, edited, ready_for_review) and ping: issue_comment (created)
+      is acted on only for `/approve <id>`, `/reject <id>` (enqueue `approval_decision`) and
+      `@steward` mentions (enqueue `chat`); any other comment gets 200 and nothing is enqueued.
+      Still: signature verified first, 2 second response, no database access in the handler,
+      202 for every valid signed delivery of a handled event, duplicates included (the worker
+      dedupes on `(delivery_id, kind)`, see work-queue-amendments.md).
+  - target: "POST /internal/schedule"
+    note: "`approval_sweep` is now handled by a registered worker handler (it was acknowledged as ignored before this spec)."
+  - target: "GET /admin/runs/{run_id}"
+    note: >
+      For multi-agent runs `steps` MUST contain ordered `delegation` and `delegation_result` rows
+      with `agent` and `parent_agent` set; a run awaiting a decision reports status `waiting_approval`.
+paths:
+  /chat/stream:
+    post:
+      summary: Conversational endpoint with streamed output (User Story 7, FR-017)
+      security: [{adminBearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [thread_id, message]
+              properties:
+                thread_id: {type: string, maxLength: 200}
+                message: {type: string}
+                repo: {type: string}
+                pr_number: {type: integer}
+      responses:
+        '200':
+          description: Server-sent events. Event names `progress`, `delta`, `tool`, `final`, `error`; each `data:` is JSON with `run_id`. A later request with the same `thread_id` uses the earlier exchange as context.
+          content:
+            text/event-stream: {schema: {type: string}}
+        '401': {description: Missing or invalid bearer}
+  /admin/approvals:
+    get:
+      summary: List approval requests (User Story 6, FR-015)
+      security: [{adminBearer: []}]
+      parameters:
+        - {name: status, in: query, schema: {type: string, enum: [pending, approved, rejected, expired]}}
+      responses:
+        '200':
+          description: Approval requests, newest first
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/ApprovalRequest'}}
+        '401': {description: Missing or invalid bearer}
+components:
+  schemas:
+    ApprovalRequest:
+      type: object
+      required: [id, status, proposed_body]
+      properties:
+        id: {type: string}
+        run_id: {type: string}
+        status: {type: string, enum: [pending, approved, rejected, expired]}
+        proposed_body: {type: string}
+        expires_at: {type: string, format: date-time}
+        decided_by: {type: [string, 'null']}
+        posted_comment_id: {type: [string, 'null'], description: "Set only when approved; the comment the approval caused"}
+security: []

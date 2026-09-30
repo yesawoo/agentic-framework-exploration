@@ -1,8 +1,10 @@
-# Quickstart: Agent Framework Comparison
+# Quickstart: Core PR Steward (spec 001)
 
 **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 This is an executable contract (Constitution: Development Workflow, Principle VIII). It MUST be runnable top to bottom from a fresh checkout. The `just` targets below are **planned**; they do not exist yet and are created by the tasks in `tasks.md`. Until each target exists, that step is not validated.
+
+This quickstart covers spec 001 only (PR summary, hosting and spin-up/down, daily digest). Later specs write their own quickstart that starts with "assumes the 001 quickstart passes" and covers only their additions. Section numbers are the original ones; section 6 (evaluate and compare) belongs to spec 004.
 
 Expected wall-clock targets: fresh checkout to one healthy deployed implementation in under 30 minutes; full teardown in under 10 minutes (SC-004).
 
@@ -37,11 +39,11 @@ Expected: `just doctor` prints one line per check and exits 0.
 ## 2. Local contract check (no AWS, no model spend)
 
 ```bash
-just up-local         # docker compose: Postgres, ElasticMQ, stub GitHub API, stub Bedrock Runtime endpoint, tool server, all 4 implementations
+just up-local         # docker compose: Postgres, ElasticMQ, migrate one-shot, stub GitHub API, stub Bedrock Runtime endpoint, tool server, all 4 implementations
 just conformance-local
 ```
 
-Expected: contract-tier suite passes for each implementation: health 200, forged webhook 401, redelivered webhook processed once, tool-server records well-formed, admin/MCP/A2A endpoints match `contracts/`. Record the observed pass counts in the PR (Constitution VIII).
+Expected: contract-tier suite passes for each implementation: health 200, forged webhook 401, redelivered webhook processed once, PR summary recorded once on the tool server, digest published once, tool-server records well-formed, `/admin/runs` matches `contracts/`. Record the observed pass counts in the PR (Constitution VIII).
 
 ## 2b. The short version: spin up and down
 
@@ -86,30 +88,19 @@ Repeat with `claude-agent-sdk`, `mastra`, `pydantic-ai` (each is independent).
 
 ## 5. User story validations (live tier)
 
-Each scenario has a `just` target that drives it and asserts the outcome; the number in parentheses is the spec story.
+Each scenario has a `just` target that drives it and asserts the outcome; the number in parentheses is the spec story. Live scenarios open real PRs on `$WATCHED_REPO` and spend Bedrock tokens (owner approval).
 
 ```bash
 just scenario langgraph pr-summary      # (US1) opens a fixture PR on $WATCHED_REPO; asserts one tool-server record within 2 min
 just scenario langgraph digest          # (US3) seeds PRs dated yesterday; triggers digest; asserts the GitHub issue + tool-server record; reruns and asserts no duplicate
-just scenario langgraph multi-agent     # (US4) risky PR with no tests; asserts findings from each specialist and the delegation trace via /admin/runs/{id}
-just scenario langgraph safety          # (US5) forged webhook, duplicate delivery, injection PR
-just scenario langgraph approval        # (US6) proposed comment is pending until /approve; reject and expiry leave the PR untouched
-just scenario langgraph chat            # (US7) @steward command streams progress; follow-up uses context; non-owner ignored
-just scenario langgraph context-memory  # (US10, US15) needs-context and oversized fixtures; convention learned in one PR applied in the next; delete fact and re-check
-just scenario langgraph mcp-server      # (US11) generic MCP client lists tools and summarizes a PR
-just scenario langgraph tools           # (US12) on-demand tool load and denied-tool refusal
-just scenario langgraph a2a-mixed pydantic-ai   # (US14) coordinator in langgraph uses the pydantic-ai risk specialist
-just scenario langgraph sandbox         # (US13, only if supported; otherwise prints "not natively supported")
+just scenario langgraph deploy-smoke    # (US2) URL reachable, only the addressed implementation reacts, teardown of one leaves the others healthy
 ```
+
+Scenarios for later stories (`multi-agent`, `safety`, `approval`, `chat`, `context-memory`, `mcp-server`, `tools`, `a2a-mixed`, `sandbox`) are added by specs 002 and 003.
 
 ## 6. Evaluate and compare
 
-```bash
-just eval langgraph                     # shared harness + the framework's native eval; writes shared/conformance/reports/langgraph/<ts>.json
-just eval-all                           # all deployed implementations
-just report-check                       # validates every report JSON against contracts/eval-report.schema.json
-just report-links                       # resolves every pinned link in docs/report/ and checks the SHAs exist
-```
+Not part of this spec: `just eval`, `just eval-all`, `just report-check`, and `just report-links` are delivered by spec 004.
 
 ## 7. Teardown
 
@@ -118,7 +109,7 @@ just destroy langgraph                  # removes that implementation only; othe
 just destroy tool-server
 just destroy shared                     # runtime layer only; the database and CloudFront stay
 # or all of the above in order: just down
-just destroy-all                        # also removes the durable and edge layers, including the database (no final snapshot unless KEEP_FINAL_SNAPSHOT=1)
+just destroy-all                        # also removes the durable and edge layers, including the database (no final snapshot unless KEEP_FINAL_SNAPSHOT=1); succeeds even with images in ECR and objects in the artifacts bucket
 just verify-clean                       # lists any remaining tagged resources (project=agentic-framework-exploration); must be empty
 ```
 
@@ -126,4 +117,4 @@ Expected: `just verify-clean` exits 0 with no resources listed (SC-004).
 
 ## Clean-state verification checklist (Constitution VIII)
 
-Before reporting the feature complete, re-run from a fresh clone or worktree: sections 1 -> 2 in CI, and 3 -> 7 by an actor other than the implementer. Record the commands and the observed output, including status codes from each `just smoke`.
+Before reporting this spec complete, re-run from a fresh clone or worktree: sections 1 -> 2 in CI, and 3 -> 5 and 7 by an actor other than the implementer. Record the commands and the observed output, including status codes from each `just smoke`.

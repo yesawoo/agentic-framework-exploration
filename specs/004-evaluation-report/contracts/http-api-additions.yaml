@@ -1,0 +1,15 @@
+openapi: 3.1.0
+info:
+  title: PR Steward implementation HTTP contract, additions by spec 004
+  version: 0.1.0
+  description: >
+    OpenAPI fragment. Extends the base contract specs/001-core-pr-steward/contracts/http-api.yaml
+    (and its additions from specs 002 and 003). Spec 004 (evaluation and report) introduces
+    no new HTTP paths: the evaluation harness reads run cost and duration through the existing
+    GET /admin/runs and GET /admin/runs/{run_id} (spec 001), and the tool-server inspection view
+    GET /toolserver/records. This file exists so the ownership is explicit and so Phase 0
+    reconciliation (T402) has one place to record a path if the as-built code needs one.
+    If a path is added, it MUST also be added to every implementation and covered by the
+    conformance suite.
+x-extends: ../../001-core-pr-steward/contracts/http-api.yaml
+paths: {}

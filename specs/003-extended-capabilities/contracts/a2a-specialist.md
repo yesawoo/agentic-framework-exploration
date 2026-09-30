@@ -1,8 +1,8 @@
 # Contract: Cross-framework specialist over A2A
 
-**Requirements**: FR-038, FR-039, FR-040 (User Story 14, P3) | Protocol: A2A (target v1.0 with v0.3 compatibility; Mastra supports both, see research S7).
+**Spec**: 003-extended-capabilities | **Requirements**: FR-038, FR-039, FR-040 (User Story 14, P3) | Protocol: A2A (target v1.0 with v0.3 compatibility; Mastra supports both, see this spec's research S7).
 
-Every implementation serves one A2A specialist, the **risk reviewer**, and can call another implementation's specialist from its coordinator when configured with `REMOTE_SPECIALISTS` (a list of `{name, url, token_secret}`).
+Every implementation serves one A2A specialist, the **risk reviewer** built by spec 002 (User Story 4), and can call another implementation's specialist from its coordinator when configured with `REMOTE_SPECIALISTS` (a list of `{name, url, token_secret}`; the variable is defined in spec 001 `contracts/environment.md`, with peer-token wiring in `environment-additions.md`).
 
 ## Agent card (served at `/.well-known/agent-card.json` under the implementation prefix)
 ```json
@@ -33,6 +33,6 @@ Auth: bearer token per configured peer only (FR-039); unknown peers get 401.
 
 ## Coordinator behavior
 - Each remote call is recorded as `delegation` and `delegation_result` steps with `framework` set to the remote's framework (FR-039).
-- Timeout 30s (configurable). Unreachable, unauthorized, or protocol-mismatched remotes yield a labeled partial result (`missing_perspectives: ["risk"]`), never a failed review (FR-040).
+- Timeout 30s (configurable). Unreachable, unauthorized, or protocol-mismatched remotes yield a labeled partial result (`missing_perspectives: ["risk"]`, the field defined by spec 002), never a failed review (FR-040).
 - Loop guard: requests carry a hop count in `correlation`; a specialist refuses requests with hops >= 2 (spec edge case: mutual delegation loop).
-- The core review (User Story 4) never depends on remotes; mixed mode is enabled only by configuration.
+- The core review (User Story 4, spec 002) never depends on remotes; mixed mode is enabled only by configuration.

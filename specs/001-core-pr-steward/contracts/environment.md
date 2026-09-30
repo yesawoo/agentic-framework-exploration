@@ -1,6 +1,6 @@
 # Contract: Environment variables
 
-One naming scheme for every implementation, the tool server, the migrate task, compose, and the OpenTofu modules. Local and CI runs use dummy values only; real secrets come from AWS Secrets Manager injected into the ECS task definition (Constitution V), never from a file in the repository.
+Owner: spec 001. One naming scheme for every implementation, the tool server, the migrate task, compose, and the OpenTofu modules. Local and CI runs use dummy values only; real secrets come from AWS Secrets Manager injected into the ECS task definition (Constitution V), never from a file in the repository.
 
 | Name | Used by | Source (AWS) | Local / CI | Notes |
 |---|---|---|---|---|
@@ -9,14 +9,14 @@ One naming scheme for every implementation, the tool server, the migrate task, c
 | `AWS_REGION` | all | task definition (`us-east-1` default) | `us-east-1` | |
 | `BEDROCK_REGION` | implementations, judge | task definition (defaults to `AWS_REGION`) | `us-east-1` | |
 | `BEDROCK_MODEL_AGENT` | implementations | task definition | stub id | Global inference profile for Sonnet 5.5 (pinned by S12) |
-| `BEDROCK_MODEL_JUDGE` | conformance judge | operator shell | stub id | Global inference profile for Opus 5.5 |
+| `BEDROCK_MODEL_JUDGE` | conformance judge | operator shell | stub id | Global inference profile for Opus 5.5 (pinned here by S12, used from spec 004) |
 | `BEDROCK_MODEL_HELPER` | implementations | task definition | stub id | Helper model (Haiku 4.5 or its replacement per S12) |
 | `BEDROCK_ENDPOINT_URL` | implementations | unset on AWS | stub URL | Local/CI only; overrides the Bedrock Runtime endpoint |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | implementations | task role (never set) | `test` / `test` | Dummy values for the stub only |
 | `GITHUB_API_URL` | implementations, conformance | unset (`https://api.github.com`) | stub URL | Points PyGithub/Octokit at `stub_github` locally |
 | `GITHUB_TOKEN` | implementations | Secrets Manager | dummy | |
 | `GITHUB_WEBHOOK_SECRET` | implementations | Secrets Manager | dummy | HMAC key for `X-Hub-Signature-256` |
-| `ADMIN_TOKEN` | implementations | Secrets Manager | dummy | Bearer for `/admin/*`, `/internal/*`, agent MCP |
+| `ADMIN_TOKEN` | implementations | Secrets Manager | dummy | Bearer for `/admin/*` and `/internal/*` (spec 003 also uses it for the agent MCP endpoint) |
 | `TOOLSERVER_URL` | implementations | task definition: the CloudFront URL plus `/toolserver` | compose URL | On AWS, service-to-service calls go through CloudFront (which adds the origin secret header), so the ALB's default 403 stays in force |
 | `TOOLSERVER_TOKEN` | implementations, tool server | Secrets Manager | dummy | Bearer for the tool server |
 | `DB_HOST`, `DB_PORT`, `DB_NAME` | implementations, tool server, migrate | task definition | compose | |
@@ -31,7 +31,7 @@ One naming scheme for every implementation, the tool server, the migrate task, c
 | `OWNER_LOGIN` | implementations | task definition | compose | Only user allowed to command or approve |
 | `DIGEST_TIMEZONE` | implementations | task definition | `America/Los_Angeles` | IANA name; one documented timezone (FR-005) |
 | `MAX_STEPS`, `MAX_RUN_SECONDS`, `MAX_RUN_COST_USD` | implementations | task definition | compose | Per-run limits (FR-016) |
-| `REMOTE_SPECIALISTS` | implementations | task definition | unset | JSON list of `{name, url, token_secret}` (US14); on AWS each `url` is the peer's CloudFront URL plus `/<impl>` |
+| `REMOTE_SPECIALISTS` | implementations | task definition | unset | Reserved name, used from spec 003 (US14): JSON list of `{name, url, token_secret}`; on AWS each `url` is the peer's CloudFront URL plus `/<impl>` |
 | `METRICS_NAMESPACE` | implementations, tool server | task definition | `AgenticFrameworkExploration` | See observability.md |
 
 ## Framework-native variables and mapping

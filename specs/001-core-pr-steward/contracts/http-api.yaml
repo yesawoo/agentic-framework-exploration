@@ -1,12 +1,14 @@
 openapi: 3.1.0
 info:
-  title: PR Steward implementation HTTP contract
+  title: PR Steward implementation HTTP contract (core, spec 001)
   version: 0.1.0
   description: >
     Every framework implementation MUST expose this HTTP surface (under its ALB path prefix,
     e.g. /langgraph). The conformance suite (shared/conformance) drives it. Paths are relative
     to the implementation's base URL. Admin and internal routes require the bearer token in
-    the ADMIN_TOKEN secret.
+    the ADMIN_TOKEN secret. This file holds the core surface owned by spec 001. Routes owned by
+    later specs are OpenAPI fragments named http-api-additions.yaml in the owning spec
+    (spec 002: approvals and chat; spec 003: memory admin and the agent MCP endpoint).
 servers:
   - url: https://{cloudfront-domain}/{implementation}
     variables:
@@ -56,8 +58,9 @@ paths:
         MUST verify X-Hub-Signature-256 (HMAC-SHA256 of the raw body with the webhook secret,
         constant-time compare) before any processing. MUST respond within 2 seconds; work is
         enqueued, never done inline, and the handler MUST NOT touch the database (it may be
-        paused and resuming); dedupe happens in the worker. Handled events: pull_request (opened, reopened,
-        synchronize, edited, ready_for_review), issue_comment (created; only `/approve`, `/reject`, and `@steward` mentions are acted on, other comments get 200 and nothing is enqueued), ping.
+        paused and resuming); dedupe happens in the worker. Handled events in spec 001: pull_request (opened, reopened,
+        synchronize, edited, ready_for_review), which creates a `pr_summary` work item, and ping. Every other event,
+        including issue_comment, gets 200 and nothing is enqueued; spec 002 adds issue_comment handling.
       parameters:
         - {name: X-GitHub-Event, in: header, required: true, schema: {type: string}}
         - {name: X-GitHub-Delivery, in: header, required: true, schema: {type: string}}
@@ -82,31 +85,10 @@ paths:
               type: object
               required: [kind]
               properties:
-                kind: {type: string, enum: [digest, approval_sweep]}
-                date: {type: string, format: date, description: For digest; defaults to yesterday in the configured timezone}
+                kind: {type: string, enum: [digest]}
+                date: {type: string, format: date, description: For digest; defaults to yesterday in the configured timezone. Spec 002 adds kind approval_sweep}
       responses:
         '202': {description: Work item enqueued (idempotent on kind+date)}
-  /chat/stream:
-    post:
-      summary: Conversational endpoint with streamed output (User Story 7)
-      security: [{adminBearer: []}]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [thread_id, message]
-              properties:
-                thread_id: {type: string, maxLength: 200}
-                message: {type: string}
-                repo: {type: string}
-                pr_number: {type: integer}
-      responses:
-        '200':
-          description: Server-sent events. Event names `progress`, `delta`, `tool`, `final`, `error`; each `data:` is JSON with `run_id`.
-          content:
-            text/event-stream: {schema: {type: string}}
   /admin/runs:
     get:
       summary: List runs (FR-018)
@@ -139,40 +121,6 @@ paths:
                     properties:
                       steps: {type: array, items: {$ref: '#/components/schemas/RunStep'}}
         '404': {description: Unknown run}
-  /admin/memory:
-    get:
-      summary: List remembered facts (FR-044)
-      security: [{adminBearer: []}]
-      responses:
-        '200':
-          description: Facts
-          content:
-            application/json:
-              schema: {type: array, items: {$ref: '#/components/schemas/MemoryFact'}}
-  /admin/memory/{fact_id}:
-    put:
-      summary: Correct a fact
-      security: [{adminBearer: []}]
-      parameters: [{name: fact_id, in: path, required: true, schema: {type: string}}]
-      requestBody:
-        required: true
-        content: {application/json: {schema: {type: object, required: [statement], properties: {statement: {type: string}}}}}
-      responses:
-        '200': {description: Updated; next run uses the corrected statement}
-    delete:
-      summary: Delete a fact (takes effect on the next run)
-      security: [{adminBearer: []}]
-      parameters: [{name: fact_id, in: path, required: true, schema: {type: string}}]
-      responses:
-        '204': {description: Deleted}
-  /admin/approvals:
-    get:
-      summary: List approval requests
-      security: [{adminBearer: []}]
-      responses:
-        '200':
-          description: Approval requests
-          content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/ApprovalRequest'}}}}
 components:
   securitySchemes:
     adminBearer: {type: http, scheme: bearer}
@@ -203,22 +151,5 @@ components:
         name: {type: string}
         outcome: {type: string, enum: [ok, error, refused, timeout]}
         duration_ms: {type: integer}
-    MemoryFact:
-      type: object
-      required: [id, statement, status]
-      properties:
-        id: {type: string}
-        statement: {type: string}
-        source_ref: {type: string}
-        learned_at: {type: string, format: date-time}
-        status: {type: string, enum: [active, corrected, deleted]}
-    ApprovalRequest:
-      type: object
-      required: [id, status, proposed_body]
-      properties:
-        id: {type: string}
-        status: {type: string, enum: [pending, approved, rejected, expired]}
-        proposed_body: {type: string}
-        expires_at: {type: string, format: date-time}
-        decided_by: {type: [string, 'null']}
+
 security: []
